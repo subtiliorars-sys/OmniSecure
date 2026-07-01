@@ -1,0 +1,22 @@
+{
+  "name": "omnisecure",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OmniTender identity security suite — zero-knowledge vault, secrets manager, and secure sharing",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev": "pnpm --parallel --filter @omnisecure/server --filter @omnisecure/vault-web run dev",
+    "dev:server": "pnpm --filter @omnisecure/server run dev",
+    "dev:web": "pnpm --filter @omnisecure/vault-web run dev",
+    "test": "pnpm -r run test",
+    "lint": "pnpm -r run lint",
+    "cli": "pnpm --filter @omnisecure/cli run start"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,22 @@
+FROM node:20-alpine AS builder
+WORKDIR /app
+RUN corepack enable
+COPY package.json pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages ./packages
+RUN npm install -g pnpm && pnpm install --frozen-lockfile || pnpm install
+RUN pnpm --filter @omnisecure/core --filter @omnisecure/crypto --filter @omnisecure/server run build
+
+FROM node:20-alpine
+WORKDIR /app
+RUN apk add --no-cache python3 make g++
+COPY --from=builder /app/packages/server/dist ./packages/server/dist
+COPY --from=builder /app/packages/server/package.json ./packages/server/
+COPY --from=builder /app/packages/core/dist ./packages/core/dist
+COPY --from=builder /app/packages/core/package.json ./packages/core/
+COPY --from=builder /app/packages/crypto/dist ./packages/crypto/dist
+COPY --from=builder /app/packages/crypto/package.json ./packages/crypto/
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/packages/server/node_modules ./packages/server/node_modules
+ENV NODE_ENV=production
+EXPOSE 8787
+CMD ["node", "packages/server/dist/index.js"]

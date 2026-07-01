@@ -13,6 +13,7 @@ interface CreateOrgBody {
 interface CreateSendBody {
   name?: string;
   type: "text" | "file";
+  accessId?: string;
   maxAccessCount?: number;
   expirationDate?: string;
   password?: string;
@@ -90,6 +91,53 @@ export async function orgRoutes(app: FastifyInstance, db: AppDatabase): Promise<
       return reply.send({ events });
     },
   );
+
+  app.get<{ Params: { orgId: string }; Querystring: { format?: string } }>(
+    "/organizations/:orgId/events/export",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const { orgId } = request.params;
+      const member = db.prepare(`
+        SELECT role FROM organization_users WHERE organization_id = ? AND user_id = ?
+      `).get(orgId, userId);
+      if (!member) return reply.code(403).send({ code: "forbidden", message: "Not a member" });
+
+      const format = (request.query.format ?? "ndjson").toLowerCase();
+      const events = db.prepare(`
+        SELECT id, organization_id, user_id, event_type, metadata, created_at
+        FROM audit_events WHERE organization_id = ? ORDER BY created_at ASC
+      `).all(orgId) as Array<Record<string, unknown>>;
+
+      if (format === "csv") {
+        const header = "id,organization_id,user_id,event_type,metadata,created_at\n";
+        const rows = events.map((event) =>
+          [
+            event.id,
+            event.organization_id,
+            event.user_id,
+            event.event_type,
+            JSON.stringify(event.metadata ?? null),
+            event.created_at,
+          ].map(csvEscape).join(","),
+        );
+        reply.header("Content-Type", "text/csv; charset=utf-8");
+        reply.header("Content-Disposition", `attachment; filename="omnisecure-audit-${orgId}.csv"`);
+        return reply.send(header + rows.join("\n"));
+      }
+
+      reply.header("Content-Type", "application/x-ndjson; charset=utf-8");
+      reply.header("Content-Disposition", `attachment; filename="omnisecure-audit-${orgId}.ndjson"`);
+      return reply.send(events.map((event) => JSON.stringify({
+        id: event.id,
+        organizationId: event.organization_id,
+        userId: event.user_id,
+        eventType: event.event_type,
+        metadata: event.metadata ? JSON.parse(String(event.metadata)) : null,
+        createdAt: event.created_at,
+      })).join("\n"));
+    },
+  );
 }
 
 export async function sendRoutes(app: FastifyInstance, db: AppDatabase): Promise<void> {
@@ -100,7 +148,7 @@ export async function sendRoutes(app: FastifyInstance, db: AppDatabase): Promise
       const userId = getUserId(request);
       const body = request.body;
       const id = uuid();
-      const accessId = uuid().replace(/-/g, "").slice(0, 18);
+      const accessId = (body.accessId ?? uuid().replace(/-/g, "").slice(0, 18)).toLowerCase();
       const ts = nowIso();
       const passwordHash = body.password
         ? hashMasterPassword(body.password, accessId)
@@ -148,7 +196,9 @@ export async function sendRoutes(app: FastifyInstance, db: AppDatabase): Promise
         return reply.code(410).send({ code: "max_access", message: "Maximum access count reached" });
       }
 
-      db.prepare("UPDATE sends SET access_count = access_count + 1 WHERE id = ?").run(send.id);
+      if (!send.password_hash) {
+        db.prepare("UPDATE sends SET access_count = access_count + 1 WHERE id = ?").run(send.id);
+      }
 
       return reply.send({
         id: send.id,
@@ -156,6 +206,42 @@ export async function sendRoutes(app: FastifyInstance, db: AppDatabase): Promise
         name: send.name,
         type: send.type,
         passwordProtected: Boolean(send.password_hash),
+        encryptedPayload: send.password_hash
+          ? null
+          : {
+              iv: send.encrypted_payload_iv,
+              data: send.encrypted_payload_data,
+            },
+      });
+    },
+  );
+
+  app.post<{ Params: { accessId: string }; Body: { password: string } }>(
+    "/send/:accessId/unlock",
+    async (request, reply) => {
+      const { accessId } = request.params;
+      const send = db.prepare("SELECT * FROM sends WHERE access_id = ? AND disabled = 0").get(accessId) as Record<string, unknown> | undefined;
+      if (!send) return reply.code(404).send({ code: "not_found", message: "Send not found" });
+      if (!send.password_hash) {
+        return reply.code(400).send({ code: "not_password_protected", message: "Send is not password protected" });
+      }
+
+      const passwordHash = hashMasterPassword(request.body.password, accessId);
+      if (passwordHash !== String(send.password_hash)) {
+        return reply.code(403).send({ code: "invalid_password", message: "Incorrect Send password" });
+      }
+
+      if (send.expiration_date && new Date(String(send.expiration_date)) < new Date()) {
+        return reply.code(410).send({ code: "expired", message: "Send has expired" });
+      }
+      if (send.max_access_count && Number(send.access_count) >= Number(send.max_access_count)) {
+        return reply.code(410).send({ code: "max_access", message: "Maximum access count reached" });
+      }
+
+      db.prepare("UPDATE sends SET access_count = access_count + 1 WHERE id = ?").run(send.id);
+
+      return reply.send({
+        accessId: send.access_id,
         encryptedPayload: {
           iv: send.encrypted_payload_iv,
           data: send.encrypted_payload_data,
@@ -188,4 +274,73 @@ export async function emergencyRoutes(app: FastifyInstance, db: AppDatabase): Pr
     `).all(userId);
     return reply.send({ grants });
   });
+
+  app.get("/emergency-access/incoming", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request);
+    const user = db.prepare("SELECT email FROM users WHERE id = ?").get(userId) as { email: string } | undefined;
+    if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
+
+    const grants = db.prepare(`
+      SELECT ea.*, u.email AS grantor_email
+      FROM emergency_access ea
+      JOIN users u ON u.id = ea.grantor_user_id
+      WHERE ea.grantee_email = ?
+    `).all(user.email.toLowerCase());
+    return reply.send({ grants });
+  });
+
+  app.post<{ Params: { id: string } }>(
+    "/emergency-access/:id/accept",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = db.prepare("SELECT email FROM users WHERE id = ?").get(userId) as { email: string } | undefined;
+      if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
+
+      const grant = db.prepare("SELECT * FROM emergency_access WHERE id = ?").get(request.params.id) as Record<string, unknown> | undefined;
+      if (!grant) return reply.code(404).send({ code: "not_found", message: "Grant not found" });
+      if (String(grant.grantee_email).toLowerCase() !== user.email.toLowerCase()) {
+        return reply.code(403).send({ code: "forbidden", message: "Not the designated grantee" });
+      }
+
+      db.prepare("UPDATE emergency_access SET status = 'accepted' WHERE id = ?").run(request.params.id);
+      return reply.send({ id: request.params.id, status: "accepted" });
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    "/emergency-access/:id/initiate",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = db.prepare("SELECT email FROM users WHERE id = ?").get(userId) as { email: string } | undefined;
+      if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
+
+      const grant = db.prepare("SELECT * FROM emergency_access WHERE id = ?").get(request.params.id) as Record<string, unknown> | undefined;
+      if (!grant) return reply.code(404).send({ code: "not_found", message: "Grant not found" });
+      if (String(grant.grantee_email).toLowerCase() !== user.email.toLowerCase()) {
+        return reply.code(403).send({ code: "forbidden", message: "Not the designated grantee" });
+      }
+      if (grant.status !== "accepted") {
+        return reply.code(409).send({ code: "not_accepted", message: "Emergency access must be accepted first" });
+      }
+
+      const createdAt = new Date(String(grant.created_at));
+      const waitMs = Number(grant.wait_days) * 24 * 60 * 60 * 1000;
+      if (Date.now() < createdAt.getTime() + waitMs) {
+        return reply.code(409).send({ code: "wait_period", message: "Waiting period has not elapsed" });
+      }
+
+      db.prepare("UPDATE emergency_access SET status = 'recovery_initiated' WHERE id = ?").run(request.params.id);
+      return reply.send({ id: request.params.id, status: "recovery_initiated" });
+    },
+  );
+}
+
+function csvEscape(value: unknown): string {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
 }

@@ -1,5 +1,6 @@
 import type { Cipher, LoginCipherData, VaultHealthReport } from "./types.js";
 import { scorePasswordStrength } from "./generators.js";
+import type { PwnedPasswordResult } from "./hibp.js";
 
 export function analyzeVaultHealth(ciphers: Cipher[]): VaultHealthReport {
   const loginItems = ciphers.filter((c) => c.type === "login");
@@ -56,6 +57,50 @@ export function analyzeVaultHealth(ciphers: Cipher[]): VaultHealthReport {
     reusedPasswords,
     exposedPasswords: 0,
     unsecureWebsites: 0,
+    items,
+  };
+}
+
+export async function enrichVaultHealthWithBreaches(
+  report: VaultHealthReport,
+  ciphers: Cipher[],
+  checkPassword: (password: string) => Promise<PwnedPasswordResult>,
+): Promise<VaultHealthReport> {
+  const loginItems = ciphers.filter((cipher) => cipher.type === "login");
+  const checked = new Map<string, PwnedPasswordResult>();
+  let exposedPasswords = 0;
+  const items = [...report.items];
+
+  for (const cipher of loginItems) {
+    const password = (cipher.data as LoginCipherData).password ?? "";
+    if (!password) continue;
+
+    let result = checked.get(password);
+    if (!result) {
+      result = await checkPassword(password);
+      checked.set(password, result);
+    }
+
+    if (!result.exposed) continue;
+    exposedPasswords++;
+
+    const existing = items.find((item) => item.cipherId === cipher.id);
+    if (existing) {
+      if (!existing.issues.includes("exposed_password")) {
+        existing.issues.push("exposed_password");
+      }
+    } else {
+      items.push({
+        cipherId: cipher.id,
+        name: cipher.name,
+        issues: ["exposed_password"],
+      });
+    }
+  }
+
+  return {
+    ...report,
+    exposedPasswords,
     items,
   };
 }

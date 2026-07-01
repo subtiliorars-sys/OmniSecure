@@ -18,11 +18,11 @@ This document maps [Bitwarden products and features](https://bitwarden.com/tools
 | Password / passphrase / username generators | `@omnisecure/core` + `/api/tools/*` | ✅ |
 | Password strength tester | `/api/tools/password-strength` | ✅ |
 | Vault health reports (weak/reused) | `analyzeVaultHealth()` + web UI | ✅ |
-| Data breach reports (HIBP) | — | 📋 |
-| Integrated TOTP authenticator | Use [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) | 🚧 |
+| Data breach reports (HIBP) | `checkPasswordPwned()` + vault health UI | ✅ |
+| Integrated TOTP authenticator | Vault TOTP codes + [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) app | 🚧 |
 | Encrypted file attachments | — | 📋 |
-| Emergency access | `/api/emergency-access` | 🚧 |
-| Import / export | Bitwarden CSV import (web + CLI) | ✅ |
+| Emergency access | `/api/emergency-access` + web UI (invite/accept/initiate) | 🚧 |
+| Import / export | Bitwarden CSV + JSON import/export (web + CLI) | ✅ |
 | Biometric unlock | — | 📋 |
 | Offline cache | Web localStorage session | 🚧 |
 | Browser extension autofill | `apps/browser-extension` Chrome/Edge MV3 | ✅ |
@@ -65,7 +65,7 @@ This document maps [Bitwarden products and features](https://bitwarden.com/tools
 | Enterprise policies | — | 📋 |
 | Account recovery (admin) | — | 📋 |
 | Access Intelligence | Vault health as foundation | 📋 |
-| SIEM integration | Audit events export | 📋 |
+| SIEM integration | Audit events NDJSON/CSV export | ✅ |
 | Self-host / private cloud | Docker | ✅ |
 | Domain claim verification | — | 📋 |
 

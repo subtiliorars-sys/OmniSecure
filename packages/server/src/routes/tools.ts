@@ -41,7 +41,7 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       status: "ok",
       service: "omnisecure-api",
-      version: "0.1.0",
+      version: "0.3.0",
     });
   });
 }

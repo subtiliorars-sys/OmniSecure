@@ -79,13 +79,13 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 
 ## Roadmap
 
-**v0.1 (current):** Core vault, sync, orgs, collections, Send, Secrets Manager API, CLI, web vault, self-host Docker.
+**v0.1:** Core vault, sync, orgs, collections, Send, Secrets Manager API, CLI, web vault, self-host Docker.
 
-**v0.2:** Mobile apps, HIBP breach reports, Bitwarden JSON import, Firefox extension.
+**v0.2:** Browser extension, Bitwarden CSV import, ecosystem wiring.
 
-**v0.3:** Enterprise — SSO (SAML/OIDC), SCIM, RBAC policies, SIEM event export, Access Intelligence-style risk reports.
+**v0.3 (current):** HIBP breach checks, Bitwarden JSON import/export, TOTP codes in vault, emergency access UI, SIEM audit export, Send receive page, Firefox extension manifest, CI.
 
-**v0.4:** Passkey-native login, SSH agent, emergency access workflows, phishing domain warnings.
+**v0.4:** Mobile apps, SSO (SAML/OIDC), SCIM, passkey-native login.
 
 ## License
 

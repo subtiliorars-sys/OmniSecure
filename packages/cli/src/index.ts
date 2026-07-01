@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { generatePassphrase, generatePassword, generateUsername, scorePasswordStrength, parseBitwardenCsv, bitwardenRowsToCipherData } from "@omnisecure/core";
-import { encryptJson, unlockSymmetricKey } from "@omnisecure/crypto";
+import { generatePassphrase, generatePassword, generateUsername, scorePasswordStrength, parseBitwardenCsv, bitwardenRowsToCipherData, parseBitwardenJson, exportBitwardenCsv, exportBitwardenJson, checkPasswordPwned } from "@omnisecure/core";
+import { encryptJson, unlockSymmetricKey, decryptJson } from "@omnisecure/crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -48,7 +48,7 @@ const program = new Command();
 program
   .name("omsecure")
   .description("OmniSecure CLI — password manager, secrets, and secure sharing for OmniTender")
-  .version("0.1.0");
+  .version("0.3.0");
 
 program
   .command("register")
@@ -172,19 +172,21 @@ program
 
 program
   .command("import")
-  .description("Import vault items from Bitwarden CSV export")
-  .requiredOption("-f, --file <path>", "Path to Bitwarden export CSV")
+  .description("Import vault items from Bitwarden CSV or JSON export")
+  .requiredOption("-f, --file <path>", "Path to Bitwarden export file")
   .requiredOption("--master-password <password>", "Master password to encrypt imported items")
-  .action(async (opts: { file: string; masterPassword: string }) => {
+  .option("--format <format>", "csv or json (auto-detected from extension when omitted)")
+  .action(async (opts: { file: string; masterPassword: string; format?: string }) => {
     const config = loadConfig();
     if (!config.token || !config.email || !config.userKeys) {
       console.error("Run omsecure login first");
       process.exit(1);
     }
-    const csv = readFileSync(opts.file, "utf8");
-    const rows = parseBitwardenCsv(csv);
+    const text = readFileSync(opts.file, "utf8");
+    const format = opts.format ?? (opts.file.toLowerCase().endsWith(".json") ? "json" : "csv");
+    const rows = format === "json" ? parseBitwardenJson(text) : parseBitwardenCsv(text);
     if (!rows.length) {
-      console.error("No items found in CSV");
+      console.error("No items found in export file");
       process.exit(1);
     }
     const symmetricKey = unlockSymmetricKey(opts.masterPassword, config.email, config.userKeys);
@@ -208,6 +210,68 @@ program
       process.exit(1);
     }
     console.log(`Imported ${String(data.imported)} items (${String(data.foldersCreated)} folders)`);
+  });
+
+program
+  .command("export")
+  .description("Export decrypted vault to Bitwarden CSV or JSON (writes local file)")
+  .requiredOption("-o, --output <path>", "Output file path")
+  .requiredOption("--master-password <password>", "Master password to decrypt vault items")
+  .option("--format <format>", "csv or json (auto-detected from extension when omitted)")
+  .action(async (opts: { output: string; masterPassword: string; format?: string }) => {
+    const config = loadConfig();
+    if (!config.token || !config.email || !config.userKeys) {
+      console.error("Run omsecure login first");
+      process.exit(1);
+    }
+    const res = await api("/api/vault/sync");
+    const sync = (await res.json()) as {
+      folders: Array<{ id: string; name: string; createdAt: string; updatedAt: string }>;
+      ciphers: Array<{
+        id: string;
+        type: string;
+        name: string;
+        notes?: string;
+        folderId?: string | null;
+        favorite?: boolean;
+        reprompt?: boolean;
+        encryptedData: { iv: string; data: string };
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    };
+    if (!res.ok) {
+      console.error("Sync failed");
+      process.exit(1);
+    }
+    const symmetricKey = unlockSymmetricKey(opts.masterPassword, config.email, config.userKeys);
+    const ciphers = sync.ciphers.map((cipher) => ({
+      id: cipher.id,
+      type: cipher.type as "login",
+      name: cipher.name,
+      notes: cipher.notes,
+      folderId: cipher.folderId,
+      favorite: cipher.favorite,
+      reprompt: cipher.reprompt,
+      data: decryptJson(symmetricKey, cipher.encryptedData) as Record<string, unknown>,
+      createdAt: cipher.createdAt,
+      updatedAt: cipher.updatedAt,
+    }));
+    const format = opts.format ?? (opts.output.toLowerCase().endsWith(".json") ? "json" : "csv");
+    const content = format === "json"
+      ? exportBitwardenJson(ciphers, sync.folders)
+      : exportBitwardenCsv(ciphers, sync.folders);
+    writeFileSync(opts.output, content, "utf8");
+    console.log(`Exported ${ciphers.length} items to ${opts.output}`);
+  });
+
+program
+  .command("breach-check")
+  .description("Check whether a password appears in known data breaches (HIBP k-anonymity)")
+  .argument("<password>")
+  .action(async (password: string) => {
+    const result = await checkPasswordPwned(password);
+    console.log(JSON.stringify(result, null, 2));
   });
 
 program.parse();

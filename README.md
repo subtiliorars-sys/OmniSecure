@@ -13,11 +13,13 @@ Built for the [OmniTender](https://github.com/subtiliorars-sys/OmniTender) ecosy
 | **Send** | Encrypted text/file sharing via expiring links | Bitwarden Send |
 | **Security Tools** | Password, passphrase, username generators; strength tester | Bitwarden free tools |
 | **CLI** | `omsecure` — sync, generate, secrets automation | `bw` CLI |
+| **Browser extension** | Autofill badge + popup | Bitwarden extension |
 
 ## Architecture
 
 ```
-apps/vault-web          Web vault (React + Vite)
+apps/browser-extension/ Chrome/Edge extension (autofill)
+apps/vault-web/          Web vault (React + Vite)
 packages/server         REST API (Fastify + SQLite/Postgres)
 packages/crypto         Zero-knowledge crypto (Node + Web Crypto)
 packages/core           Shared types, generators, health reports
@@ -54,6 +56,8 @@ pnpm cli register -e you@example.com -p "your-master-password"
 pnpm cli sync
 pnpm cli generate
 pnpm cli secret-set -p <projectId> -k API_KEY --value "sk-..." --master-password "..."
+pnpm cli import -f bitwarden-export.csv --master-password "..."
+pnpm build:extension   # → apps/browser-extension/dist (load unpacked in Chrome)
 ```
 
 ### Self-host (Docker)
@@ -77,7 +81,7 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 
 **v0.1 (current):** Core vault, sync, orgs, collections, Send, Secrets Manager API, CLI, web vault, self-host Docker.
 
-**v0.2:** Browser extension autofill, mobile apps, HIBP breach reports, import/export (Bitwarden CSV, 1Password, LastPass).
+**v0.2:** Mobile apps, HIBP breach reports, Bitwarden JSON import, Firefox extension.
 
 **v0.3:** Enterprise — SSO (SAML/OIDC), SCIM, RBAC policies, SIEM event export, Access Intelligence-style risk reports.
 

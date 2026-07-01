@@ -8,6 +8,7 @@ import { vaultRoutes } from "./routes/vault.js";
 import { orgRoutes, sendRoutes, emergencyRoutes } from "./routes/orgs.js";
 import { secretsRoutes } from "./routes/secrets.js";
 import { toolsRoutes, healthRoutes } from "./routes/tools.js";
+import { importRoutes } from "./routes/import.js";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -32,7 +33,10 @@ async function main(): Promise<void> {
   await app.register(healthRoutes);
   await app.register(toolsRoutes);
   await app.register(async (instance) => authRoutes(instance, db), { prefix: "/api/auth" });
-  await app.register(async (instance) => vaultRoutes(instance, db), { prefix: "/api/vault" });
+  await app.register(async (instance) => {
+    await vaultRoutes(instance, db);
+    await importRoutes(instance, db);
+  }, { prefix: "/api/vault" });
   await app.register(async (instance) => {
     await orgRoutes(instance, db);
     await sendRoutes(instance, db);

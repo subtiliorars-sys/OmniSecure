@@ -1,0 +1,58 @@
+.omnisecure-badge {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 2147483646;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.omnisecure-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  border-radius: 999px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #4f8cff, #7c5cff);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.omnisecure-badge-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.18);
+  font-size: 11px;
+}
+
+.omnisecure-badge-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 6px;
+  background: #121a2f;
+  border: 1px solid #243055;
+  border-radius: 12px;
+  min-width: 220px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.omnisecure-badge-list button {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: #e8edf8;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.omnisecure-badge-list button:hover {
+  background: #18223d;
+}

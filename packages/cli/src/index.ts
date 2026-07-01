@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { generatePassphrase, generatePassword, generateUsername, scorePasswordStrength } from "@omnisecure/core";
+import { generatePassphrase, generatePassword, generateUsername, scorePasswordStrength, parseBitwardenCsv, bitwardenRowsToCipherData } from "@omnisecure/core";
 import { encryptJson, unlockSymmetricKey } from "@omnisecure/crypto";
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -168,6 +168,46 @@ program
       process.exit(1);
     }
     console.log(`Secret stored: ${String(data.id)}`);
+  });
+
+program
+  .command("import")
+  .description("Import vault items from Bitwarden CSV export")
+  .requiredOption("-f, --file <path>", "Path to Bitwarden export CSV")
+  .requiredOption("--master-password <password>", "Master password to encrypt imported items")
+  .action(async (opts: { file: string; masterPassword: string }) => {
+    const config = loadConfig();
+    if (!config.token || !config.email || !config.userKeys) {
+      console.error("Run omsecure login first");
+      process.exit(1);
+    }
+    const csv = readFileSync(opts.file, "utf8");
+    const rows = parseBitwardenCsv(csv);
+    if (!rows.length) {
+      console.error("No items found in CSV");
+      process.exit(1);
+    }
+    const symmetricKey = unlockSymmetricKey(opts.masterPassword, config.email, config.userKeys);
+    const ciphers = rows.map((row) => ({
+      type: row.type === "secureNote" ? "secureNote" : row.type,
+      name: row.name,
+      notes: row.notes,
+      folderName: row.folder,
+      favorite: row.favorite,
+      reprompt: row.reprompt,
+      encryptedData: encryptJson(symmetricKey, bitwardenRowsToCipherData(row)),
+    }));
+    const folders = [...new Set(rows.map((r) => r.folder).filter(Boolean))] as string[];
+    const res = await api("/api/vault/import", {
+      method: "POST",
+      body: JSON.stringify({ folders, ciphers }),
+    });
+    const data = (await res.json()) as Record<string, unknown>;
+    if (!res.ok) {
+      console.error(String(data.message ?? "Import failed"));
+      process.exit(1);
+    }
+    console.log(`Imported ${String(data.imported)} items (${String(data.foldersCreated)} folders)`);
   });
 
 program.parse();

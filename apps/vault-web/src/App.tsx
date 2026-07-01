@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { EncryptedCipher, SyncResponse, CipherData } from "@omnisecure/core";
-import { analyzeVaultHealth, generatePassword } from "@omnisecure/core";
+import { analyzeVaultHealth, generatePassword, parseBitwardenCsv, bitwardenRowsToCipherData } from "@omnisecure/core";
 import {
   decryptJsonBrowser,
   encryptJsonBrowser,
@@ -9,7 +9,7 @@ import {
 } from "@omnisecure/crypto/browser";
 import { api, clearSession, loadSession, saveSession, type Session } from "./api";
 
-type View = "vault" | "send" | "secrets" | "tools" | "health";
+type View = "vault" | "send" | "secrets" | "tools" | "health" | "import";
 
 export function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession());
@@ -141,6 +141,7 @@ export function App() {
           <button className={view === "secrets" ? "active" : ""} onClick={() => setView("secrets")}>Secrets</button>
           <button className={view === "tools" ? "active" : ""} onClick={() => setView("tools")}>Tools</button>
           <button className={view === "health" ? "active" : ""} onClick={() => setView("health")}>Health</button>
+          <button className={view === "import" ? "active" : ""} onClick={() => setView("import")}>Import</button>
         </nav>
         <div className="sidebar-footer">
           <span>{session.email}</span>
@@ -162,6 +163,9 @@ export function App() {
         {view === "secrets" && <SecretsView token={session.token} organizations={sync?.organizations ?? []} />}
         {view === "tools" && <ToolsView />}
         {view === "health" && <HealthView report={health} />}
+        {view === "import" && symmetricKey && (
+          <ImportView token={session.token} symmetricKey={symmetricKey} onRefresh={() => refreshSync(session.token)} />
+        )}
       </main>
     </div>
   );
@@ -415,6 +419,72 @@ function HealthView({ report }: { report: ReturnType<typeof analyzeVaultHealth> 
         {report.items.length === 0 ? <p className="muted">No issues found.</p> : (
           <ul>{report.items.map((i) => <li key={i.cipherId}><strong>{i.name}</strong> — {i.issues.join(", ")}</li>)}</ul>
         )}
+      </div>
+    </section>
+  );
+}
+
+function ImportView({
+  token,
+  symmetricKey,
+  onRefresh,
+}: {
+  token: string;
+  symmetricKey: Uint8Array;
+  onRefresh: () => void;
+}) {
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState("");
+
+  async function handleFile(file: File) {
+    setError("");
+    setStatus("Importing…");
+    try {
+      const csv = await file.text();
+      const rows = parseBitwardenCsv(csv);
+      if (!rows.length) throw new Error("No items found in CSV");
+      const ciphers = await Promise.all(
+        rows.map(async (row) => ({
+          type: row.type === "secureNote" ? "secureNote" : row.type,
+          name: row.name,
+          notes: row.notes,
+          folderName: row.folder,
+          favorite: row.favorite,
+          reprompt: row.reprompt,
+          encryptedData: await encryptJsonBrowser(symmetricKey, bitwardenRowsToCipherData(row)),
+        })),
+      );
+      const folders = [...new Set(rows.map((r) => r.folder).filter(Boolean))] as string[];
+      const result = await api<{ imported: number }>("/api/vault/import", {
+        method: "POST",
+        body: JSON.stringify({ folders, ciphers }),
+      }, token);
+      setStatus(`Imported ${result.imported} items from Bitwarden export.`);
+      onRefresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Import failed");
+      setStatus("");
+    }
+  }
+
+  return (
+    <section className="panel">
+      <header><h2>Import from Bitwarden</h2><p>Upload an unencrypted Bitwarden CSV export. Items are encrypted locally before upload.</p></header>
+      <div className="card">
+        <label>
+          Bitwarden CSV file
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleFile(file);
+            }}
+          />
+        </label>
+        {status && <p className="success">{status}</p>}
+        {error && <p className="error">{error}</p>}
+        <p className="hint">Export from Bitwarden: Tools → Export vault → File format CSV (unencrypted).</p>
       </div>
     </section>
   );

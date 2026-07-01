@@ -1,0 +1,96 @@
+body {
+  margin: 0;
+  width: 320px;
+  min-height: 200px;
+  background: #0b1020;
+  color: #e8edf8;
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.wrap {
+  padding: 14px;
+}
+
+h1 {
+  font-size: 16px;
+  margin: 0 0 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #4f8cff, #7c5cff);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.sub {
+  color: #93a0bd;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
+label {
+  display: block;
+  font-size: 11px;
+  color: #93a0bd;
+  margin-bottom: 4px;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid #243055;
+  background: #121a2f;
+  color: #e8edf8;
+}
+
+button {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 4px;
+  background: linear-gradient(135deg, #4f8cff, #7c5cff);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid #243055;
+  color: #93a0bd;
+}
+
+.match {
+  border: 1px solid #243055;
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+  background: #121a2f;
+}
+
+.match strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.match span {
+  color: #93a0bd;
+  font-size: 12px;
+}
+
+.error {
+  color: #ff6b7a;
+  font-size: 12px;
+}

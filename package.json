@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r run build",
+    "build:extension": "pnpm --filter @omnisecure/browser-extension run build",
     "dev": "pnpm --parallel --filter @omnisecure/server --filter @omnisecure/vault-web run dev",
     "dev:server": "pnpm --filter @omnisecure/server run dev",
     "dev:web": "pnpm --filter @omnisecure/vault-web run dev",

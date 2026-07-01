@@ -1,0 +1,20 @@
+{
+  "name": "@omnisecure/browser-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@omnisecure/core": "workspace:*",
+    "@omnisecure/crypto": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.313",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

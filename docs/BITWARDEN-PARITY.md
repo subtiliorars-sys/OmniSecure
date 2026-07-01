@@ -22,10 +22,10 @@ This document maps [Bitwarden products and features](https://bitwarden.com/tools
 | Integrated TOTP authenticator | Use [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) | 🚧 |
 | Encrypted file attachments | — | 📋 |
 | Emergency access | `/api/emergency-access` | 🚧 |
-| Import / export | — | 📋 |
+| Import / export | Bitwarden CSV import (web + CLI) | ✅ |
 | Biometric unlock | — | 📋 |
 | Offline cache | Web localStorage session | 🚧 |
-| Browser extension autofill | — | 📋 |
+| Browser extension autofill | `apps/browser-extension` Chrome/Edge MV3 | ✅ |
 | Mobile apps (iOS/Android) | — | 📋 |
 | Desktop app | Web vault + CLI | 🚧 |
 | Phishing protection | — | 📋 |

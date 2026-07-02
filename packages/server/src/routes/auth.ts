@@ -1,12 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { v4 as uuid } from "uuid";
-import {
-  generateAccessToken,
-  generateUserKeys,
-  hashMasterPassword,
-  hashToken,
-  verifyTotp,
-} from "@omnisecure/crypto";
+import { generateAccessToken, generateTotpSecret, generateUserKeys, hashMasterPassword, hashToken, verifyTotp } from "@omnisecure/crypto";
 import type { AppDatabase } from "../db/schema.js";
 import { getUserId, nowIso } from "../lib/utils.js";
 
@@ -89,7 +83,7 @@ export async function authRoutes(app: FastifyInstance, db: AppDatabase): Promise
       return reply.code(401).send({ code: "invalid_credentials", message: "Invalid credentials" });
     }
 
-    if (user.totp_enabled && !verifyTotp(String(user.totp_secret), totpCode ?? "")) {
+    if (user.totp_enabled && !(await verifyTotp(String(user.totp_secret), totpCode ?? ""))) {
       return reply.code(401).send({ code: "invalid_2fa", message: "Invalid two-factor code" });
     }
 
@@ -128,8 +122,62 @@ export async function authRoutes(app: FastifyInstance, db: AppDatabase): Promise
 
   app.get("/me", { preHandler: [app.authenticate] }, async (request, reply) => {
     const userId = getUserId(request);
-    const user = db.prepare("SELECT id, email, name, premium, totp_enabled FROM users WHERE id = ?").get(userId);
+    const user = db.prepare(`
+      SELECT id, email, name, premium, totp_enabled,
+        stretched_master_key, encrypted_symmetric_key_iv, encrypted_symmetric_key_data,
+        public_key, encrypted_private_key_iv, encrypted_private_key_data
+      FROM users WHERE id = ?
+    `).get(userId) as Record<string, unknown> | undefined;
     if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
-    return reply.send({ user });
+    return reply.send({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        premium: Boolean(user.premium),
+        totpEnabled: Boolean(user.totp_enabled),
+      },
+      userKeys: {
+        stretchedMasterKey: user.stretched_master_key,
+        encryptedSymmetricKey: {
+          iv: user.encrypted_symmetric_key_iv,
+          data: user.encrypted_symmetric_key_data,
+        },
+        publicKey: user.public_key,
+        encryptedPrivateKey: {
+          iv: user.encrypted_private_key_iv,
+          data: user.encrypted_private_key_data,
+        },
+      },
+    });
   });
+
+  app.post("/totp/setup", { preHandler: [app.authenticate] }, async (request, reply) => {
+    const userId = getUserId(request);
+    const user = db.prepare("SELECT email, totp_enabled FROM users WHERE id = ?").get(userId) as { email: string; totp_enabled: number } | undefined;
+    if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
+    const secret = generateTotpSecret();
+    db.prepare("UPDATE users SET totp_secret = ?, updated_at = ? WHERE id = ?").run(secret, nowIso(), userId);
+    return reply.send({
+      secret,
+      otpauthUrl: `otpauth://totp/OmniSecure:${encodeURIComponent(user.email)}?secret=${secret}&issuer=OmniSecure`,
+    });
+  });
+
+  app.post<{ Body: { code: string } }>(
+    "/totp/enable",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = db.prepare("SELECT totp_secret FROM users WHERE id = ?").get(userId) as { totp_secret: string } | undefined;
+      if (!user?.totp_secret) {
+        return reply.code(400).send({ code: "not_configured", message: "Run TOTP setup first" });
+      }
+      if (!(await verifyTotp(user.totp_secret, request.body.code))) {
+        return reply.code(401).send({ code: "invalid_2fa", message: "Invalid authenticator code" });
+      }
+      db.prepare("UPDATE users SET totp_enabled = 1, updated_at = ? WHERE id = ?").run(nowIso(), userId);
+      return reply.send({ enabled: true });
+    },
+  );
 }

@@ -1,6 +1,6 @@
 {
   "name": "omnisecure",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "OmniTender identity security suite — zero-knowledge vault, secrets manager, and secure sharing",
   "license": "AGPL-3.0-or-later",

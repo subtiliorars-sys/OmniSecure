@@ -19,6 +19,7 @@
     "@fastify/jwt": "^9.1.0",
     "@omnisecure/core": "workspace:*",
     "@omnisecure/crypto": "workspace:*",
+    "@simplewebauthn/server": "^13.3.2",
     "better-sqlite3": "^11.9.0",
     "fastify": "^5.3.3",
     "uuid": "^11.1.0"

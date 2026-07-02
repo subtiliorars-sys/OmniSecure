@@ -303,7 +303,9 @@ export async function emergencyRoutes(app: FastifyInstance, db: AppDatabase): Pr
         return reply.code(403).send({ code: "forbidden", message: "Not the designated grantee" });
       }
 
-      db.prepare("UPDATE emergency_access SET status = 'accepted' WHERE id = ?").run(request.params.id);
+      db.prepare(`
+        UPDATE emergency_access SET status = 'accepted', grantee_user_id = ? WHERE id = ?
+      `).run(userId, request.params.id);
       return reply.send({ id: request.params.id, status: "accepted" });
     },
   );
@@ -331,8 +333,76 @@ export async function emergencyRoutes(app: FastifyInstance, db: AppDatabase): Pr
         return reply.code(409).send({ code: "wait_period", message: "Waiting period has not elapsed" });
       }
 
-      db.prepare("UPDATE emergency_access SET status = 'recovery_initiated' WHERE id = ?").run(request.params.id);
-      return reply.send({ id: request.params.id, status: "recovery_initiated" });
+      const initiatedAt = nowIso();
+      db.prepare(`
+        UPDATE emergency_access
+        SET status = 'recovery_initiated', recovery_initiated_at = ?
+        WHERE id = ?
+      `).run(initiatedAt, request.params.id);
+      return reply.send({ id: request.params.id, status: "recovery_initiated", recoveryInitiatedAt: initiatedAt });
+    },
+  );
+
+  app.put<{ Params: { id: string }; Body: { encryptedVaultKey: { iv: string; data: string } } }>(
+    "/emergency-access/:id/vault-key",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const grant = db.prepare("SELECT * FROM emergency_access WHERE id = ?").get(request.params.id) as Record<string, unknown> | undefined;
+      if (!grant) return reply.code(404).send({ code: "not_found", message: "Grant not found" });
+      if (String(grant.grantor_user_id) !== userId) {
+        return reply.code(403).send({ code: "forbidden", message: "Only the grantor can upload vault key material" });
+      }
+
+      db.prepare(`
+        UPDATE emergency_access
+        SET encrypted_vault_key_iv = ?, encrypted_vault_key_data = ?
+        WHERE id = ?
+      `).run(
+        request.body.encryptedVaultKey.iv,
+        request.body.encryptedVaultKey.data,
+        request.params.id,
+      );
+
+      return reply.send({ id: request.params.id, stored: true });
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    "/emergency-access/:id/vault-key",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const userId = getUserId(request);
+      const user = db.prepare("SELECT email FROM users WHERE id = ?").get(userId) as { email: string } | undefined;
+      if (!user) return reply.code(404).send({ code: "not_found", message: "User not found" });
+
+      const grant = db.prepare("SELECT * FROM emergency_access WHERE id = ?").get(request.params.id) as Record<string, unknown> | undefined;
+      if (!grant) return reply.code(404).send({ code: "not_found", message: "Grant not found" });
+      if (String(grant.grantee_email).toLowerCase() !== user.email.toLowerCase()) {
+        return reply.code(403).send({ code: "forbidden", message: "Not the designated grantee" });
+      }
+      if (grant.status !== "recovery_initiated") {
+        return reply.code(409).send({ code: "not_ready", message: "Recovery has not been initiated" });
+      }
+
+      const startedAt = new Date(String(grant.recovery_initiated_at ?? grant.created_at));
+      const waitMs = Number(grant.wait_days) * 24 * 60 * 60 * 1000;
+      if (Date.now() < startedAt.getTime() + waitMs) {
+        return reply.code(409).send({ code: "wait_period", message: "Waiting period has not elapsed" });
+      }
+
+      if (!grant.encrypted_vault_key_iv || !grant.encrypted_vault_key_data) {
+        return reply.code(404).send({ code: "no_vault_key", message: "Grantor has not uploaded vault key material" });
+      }
+
+      return reply.send({
+        id: grant.id,
+        encryptedVaultKey: {
+          iv: grant.encrypted_vault_key_iv,
+          data: grant.encrypted_vault_key_data,
+        },
+        grantorUserId: grant.grantor_user_id,
+      });
     },
   );
 }

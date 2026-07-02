@@ -12,21 +12,21 @@ This document maps [Bitwarden products and features](https://bitwarden.com/tools
 | Unlimited devices / sync | `/api/vault/sync` | ✅ |
 | Login, card, identity, secure note item types | Cipher types in core + vault API | ✅ |
 | SSH key storage | `sshKey` cipher type | ✅ |
-| Passkey management | `passkey` cipher type | 📋 |
+| Passkey management | WebAuthn register/login + `passkey` cipher type | 🚧 |
 | Folders | `/api/vault/folders` | ✅ |
 | Favorites, reprompt | Cipher fields | ✅ |
 | Password / passphrase / username generators | `@omnisecure/core` + `/api/tools/*` | ✅ |
 | Password strength tester | `/api/tools/password-strength` | ✅ |
 | Vault health reports (weak/reused) | `analyzeVaultHealth()` + web UI | ✅ |
 | Data breach reports (HIBP) | `checkPasswordPwned()` + vault health UI | ✅ |
-| Integrated TOTP authenticator | Vault TOTP codes + [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) app | 🚧 |
-| Encrypted file attachments | — | 📋 |
-| Emergency access | `/api/emergency-access` + web UI (invite/accept/initiate) | 🚧 |
+| Integrated TOTP authenticator | Vault TOTP codes + account 2FA setup + [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) | ✅ |
+| Encrypted file attachments | `/api/vault/ciphers/:id/attachments` + web UI | ✅ |
+| Emergency access | `/api/emergency-access` + vault-key handoff UI | ✅ |
 | Import / export | Bitwarden CSV + JSON import/export (web + CLI) | ✅ |
 | Biometric unlock | — | 📋 |
 | Offline cache | Web localStorage session | 🚧 |
 | Browser extension autofill | `apps/browser-extension` Chrome/Edge MV3 | ✅ |
-| Mobile apps (iOS/Android) | — | 📋 |
+| Mobile apps (iOS/Android) | `apps/mobile` Expo app with unlock + sync | 🚧 |
 | Desktop app | Web vault + CLI | 🚧 |
 | Phishing protection | — | 📋 |
 
@@ -59,8 +59,8 @@ This document maps [Bitwarden products and features](https://bitwarden.com/tools
 | Collections (shared items) | DB + cipher_collections | ✅ |
 | RBAC (owner/admin/user) | organization_users.role | ✅ |
 | Audit event logs | `/api/organizations/:id/events` | ✅ |
-| SSO (SAML/OIDC) | — | 📋 |
-| SCIM provisioning | — | 📋 |
+| SSO (SAML/OIDC) | `/api/sso/*` + org IdP config | 🚧 |
+| SCIM provisioning | `/scim/v2/Users` + org tokens | 🚧 |
 | Directory sync (LDAP) | — | 📋 |
 | Enterprise policies | — | 📋 |
 | Account recovery (admin) | — | 📋 |

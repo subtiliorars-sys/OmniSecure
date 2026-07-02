@@ -73,7 +73,15 @@ export async function unlockSymmetricKeyBrowser(
   return symmetric;
 }
 
-async function decryptBytesBrowser(key: Uint8Array, blob: EncryptedBlob): Promise<Uint8Array> {
+export async function encryptBytesBrowser(key: Uint8Array, bytes: Uint8Array): Promise<EncryptedBlob> {
+  const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+  const aesKey = await importAesKey(key);
+  const payload = Uint8Array.from(bytes);
+  const encrypted = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: Uint8Array.from(iv) }, aesKey, payload));
+  return { iv: toBase64(iv), data: toBase64(encrypted) };
+}
+
+export async function decryptBytesBrowser(key: Uint8Array, blob: EncryptedBlob): Promise<Uint8Array> {
   const iv = fromBase64(blob.iv);
   const data = fromBase64(blob.data);
   const aesKey = await importAesKey(key);

@@ -1,6 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, pbkdf2Sync, randomBytes, generateKeyPairSync, privateDecrypt, publicEncrypt } from "node:crypto";
 import type { EncryptedBlob, UserKeys } from "@omnisecure/core";
-import { DEFAULT_KDF } from "@omnisecure/core";
+import { DEFAULT_KDF, verifyTotpCode } from "@omnisecure/core";
 
 const AES_ALGO = "aes-256-gcm";
 const IV_LENGTH = 12;
@@ -133,7 +133,6 @@ export function generateTotpSecret(): string {
   return toBase64(randomBytes(20));
 }
 
-export function verifyTotp(_secret: string, _code: string): boolean {
-  // Placeholder — production uses RFC 6238; integrate with OmniAuth patterns.
-  return _code.length === 6 && /^\d+$/.test(_code);
+export async function verifyTotp(secret: string, code: string): Promise<boolean> {
+  return verifyTotpCode(secret, code);
 }

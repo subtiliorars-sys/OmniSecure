@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { EncryptedCipher, SyncResponse, CipherData } from "@omnisecure/core";
 import { analyzeVaultHealth, generatePassword, parseBitwardenCsv, bitwardenRowsToCipherData, parseBitwardenJson, enrichVaultHealthWithBreaches, checkPasswordPwned, generateTotp, exportBitwardenCsv, exportBitwardenJson } from "@omnisecure/core";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import {
+  decryptBytesBrowser,
   decryptJsonBrowser,
+  encryptBytesBrowser,
   encryptJsonBrowser,
   randomKeyBrowser,
   unlockSymmetricKeyBrowser,
@@ -10,7 +13,13 @@ import {
 import { api, clearSession, loadSession, saveSession, type Session } from "./api";
 import { encodeSendKey, sendKeyFromPassword } from "./send-utils";
 
-type View = "vault" | "send" | "secrets" | "tools" | "health" | "import" | "export" | "emergency" | "orgs";
+type View = "vault" | "send" | "secrets" | "tools" | "health" | "import" | "export" | "emergency" | "orgs" | "security";
+
+function completeSession(
+  data: { token: string; user: { email: string }; userKeys: Session["userKeys"] },
+): Session {
+  return { token: data.token, email: data.user.email, userKeys: data.userKeys };
+}
 
 export function App() {
   const [session, setSession] = useState<Session | null>(() => loadSession());
@@ -20,6 +29,30 @@ export function App() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [symmetricKey, setSymmetricKey] = useState<Uint8Array | null>(null);
+  const [ssoNotice, setSsoNotice] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    if (!token) return;
+    void (async () => {
+      try {
+        const data = await api<{
+          user: { email: string };
+          userKeys: Session["userKeys"];
+        }>("/api/auth/me", {}, token);
+        const next = completeSession({ token, user: data.user, userKeys: data.userKeys });
+        saveSession(next);
+        setSession(next);
+        setSsoNotice(params.get("sso") === "saml"
+          ? "Signed in with SAML SSO. Unlock with your master password to decrypt the vault."
+          : "Signed in with SSO. Unlock with your master password to decrypt the vault.");
+        window.history.replaceState({}, "", window.location.pathname);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "SSO sign-in failed");
+      }
+    })();
+  }, []);
 
   const decryptedCiphers = useMemo(() => {
     if (!sync || !symmetricKey) return [];
@@ -79,7 +112,7 @@ export function App() {
         user: { email: string };
         userKeys: Session["userKeys"];
       }>(path, { method: "POST", body: JSON.stringify(body) });
-      const next: Session = { token: data.token, email: data.user.email, userKeys: data.userKeys };
+      const next = completeSession(data);
       saveSession(next);
       setSession(next);
       const key = await unlockSymmetricKeyBrowser(password, email, data.userKeys);
@@ -101,13 +134,14 @@ export function App() {
   }
 
   if (!session) {
-    return <AuthScreen onAuth={handleAuth} loading={loading} error={error} />;
+    return <AuthScreen onAuth={handleAuth} onPasskeySession={(next) => { saveSession(next); setSession(next); }} loading={loading} error={error} />;
   }
 
   if (!unlocked) {
     return (
       <UnlockScreen
         email={session.email}
+        notice={ssoNotice}
         onUnlock={async (password) => {
           try {
             const key = await unlockSymmetricKeyBrowser(password, session.email, session.userKeys);
@@ -145,6 +179,7 @@ export function App() {
           <button className={view === "import" ? "active" : ""} onClick={() => setView("import")}>Import</button>
           <button className={view === "export" ? "active" : ""} onClick={() => setView("export")}>Export</button>
           <button className={view === "orgs" ? "active" : ""} onClick={() => setView("orgs")}>Organizations</button>
+          <button className={view === "security" ? "active" : ""} onClick={() => setView("security")}>Security</button>
           <button className={view === "emergency" ? "active" : ""} onClick={() => setView("emergency")}>Emergency</button>
         </nav>
         <div className="sidebar-footer">
@@ -176,8 +211,11 @@ export function App() {
         {view === "orgs" && (
           <OrgsView token={session.token} organizations={sync?.organizations ?? []} onRefresh={() => refreshSync(session.token)} />
         )}
-        {view === "emergency" && (
-          <EmergencyView token={session.token} email={session.email} />
+        {view === "emergency" && symmetricKey && (
+          <EmergencyView token={session.token} email={session.email} symmetricKey={symmetricKey} />
+        )}
+        {view === "security" && (
+          <SecurityView token={session.token} email={session.email} />
         )}
       </main>
     </div>
@@ -186,10 +224,12 @@ export function App() {
 
 function AuthScreen({
   onAuth,
+  onPasskeySession,
   loading,
   error,
 }: {
   onAuth: (mode: "login" | "register", email: string, password: string, name?: string) => void;
+  onPasskeySession: (session: Session) => void;
   loading: boolean;
   error: string;
 }) {
@@ -197,6 +237,34 @@ function AuthScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [passkeyError, setPasskeyError] = useState("");
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
+
+  async function signInWithPasskey() {
+    setPasskeyBusy(true);
+    setPasskeyError("");
+    try {
+      const { startAuthentication } = await import("@simplewebauthn/browser");
+      const options = await api<import("@simplewebauthn/browser").PublicKeyCredentialRequestOptionsJSON>(
+        "/api/webauthn/login/options",
+        { method: "POST", body: JSON.stringify({ email: email || undefined }) },
+      );
+      const response = await startAuthentication({ optionsJSON: options });
+      const data = await api<{
+        token: string;
+        user: { email: string };
+        userKeys: Session["userKeys"];
+      }>("/api/webauthn/login/verify", {
+        method: "POST",
+        body: JSON.stringify({ response }),
+      });
+      onPasskeySession(completeSession(data));
+    } catch (e) {
+      setPasskeyError(e instanceof Error ? e.message : "Passkey sign-in failed");
+    } finally {
+      setPasskeyBusy(false);
+    }
+  }
 
   return (
     <div className="auth-page">
@@ -227,9 +295,14 @@ function AuthScreen({
             Master password
             <input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Never shared with the server" />
           </label>
-          {error && <p className="error">{error}</p>}
+          {(error || passkeyError) && <p className="error">{error || passkeyError}</p>}
           <button type="submit" disabled={loading}>{loading ? "Working…" : mode === "login" ? "Unlock vault" : "Create vault"}</button>
         </form>
+        {mode === "login" && (
+          <button type="button" className="ghost" disabled={passkeyBusy} onClick={() => void signInWithPasskey()}>
+            {passkeyBusy ? "Waiting for passkey…" : "Sign in with passkey"}
+          </button>
+        )}
         <p className="hint">End-to-end encrypted. OmniSecure servers store ciphertext only — your master password never leaves this device.</p>
       </div>
     </div>
@@ -238,11 +311,13 @@ function AuthScreen({
 
 function UnlockScreen({
   email,
+  notice,
   onUnlock,
   onLogout,
   error,
 }: {
   email: string;
+  notice?: string;
   onUnlock: (password: string) => void | Promise<void>;
   onLogout: () => void;
   error: string;
@@ -253,6 +328,7 @@ function UnlockScreen({
       <div className="auth-card">
         <h2>Unlock vault</h2>
         <p>Signed in as <strong>{email}</strong></p>
+        {notice && <p className="hint">{notice}</p>}
         <form onSubmit={(e) => { e.preventDefault(); void onUnlock(password); }}>
           <label>
             Master password
@@ -328,6 +404,7 @@ function VaultView({
                   {"totp" in c.data && Boolean((c.data as { totp?: string }).totp) && (
                     <TotpBadge secret={String((c.data as { totp?: string }).totp)} />
                   )}
+                  <CipherAttachments cipherId={c.id} token={token} symmetricKey={symmetricKey} />
                 </li>
               ))}
             </ul>
@@ -335,6 +412,96 @@ function VaultView({
         </div>
       </div>
     </section>
+  );
+}
+
+interface VaultAttachment {
+  id: string;
+  cipherId: string;
+  fileName: string;
+  size: number;
+  encryptedData: { iv: string; data: string };
+}
+
+function CipherAttachments({
+  cipherId,
+  token,
+  symmetricKey,
+}: {
+  cipherId: string;
+  token: string;
+  symmetricKey: Uint8Array;
+}) {
+  const [attachments, setAttachments] = useState<VaultAttachment[]>([]);
+  const [status, setStatus] = useState("");
+
+  async function refresh() {
+    const data = await api<{ attachments: VaultAttachment[] }>(
+      `/api/vault/ciphers/${cipherId}/attachments`,
+      {},
+      token,
+    );
+    setAttachments(data.attachments);
+  }
+
+  useEffect(() => {
+    void refresh().catch(() => setAttachments([]));
+  }, [cipherId, token]);
+
+  async function uploadFile(file: File) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const encryptedData = await encryptBytesBrowser(symmetricKey, bytes);
+    await api(`/api/vault/ciphers/${cipherId}/attachments`, {
+      method: "POST",
+      body: JSON.stringify({ fileName: file.name, size: file.size, encryptedData }),
+    }, token);
+    setStatus(`Uploaded ${file.name}`);
+    await refresh();
+  }
+
+  async function downloadAttachment(attachment: VaultAttachment) {
+    const bytes = await decryptBytesBrowser(symmetricKey, attachment.encryptedData);
+    const copy = bytes.slice();
+    const blob = new Blob([copy.buffer.slice(copy.byteOffset, copy.byteOffset + copy.byteLength)]);
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = attachment.fileName;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function deleteAttachment(attachmentId: string) {
+    await api(`/api/vault/ciphers/${cipherId}/attachments/${attachmentId}`, { method: "DELETE" }, token);
+    await refresh();
+  }
+
+  return (
+    <div className="attachments">
+      <label className="file-upload">
+        Attach file
+        <input
+          type="file"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void uploadFile(file).catch((err: Error) => setStatus(err.message));
+            e.target.value = "";
+          }}
+        />
+      </label>
+      {attachments.length > 0 && (
+        <ul>
+          {attachments.map((attachment) => (
+            <li key={attachment.id}>
+              {attachment.fileName} ({Math.round(attachment.size / 1024)} KB)
+              <button type="button" className="ghost" onClick={() => void downloadAttachment(attachment)}>Download</button>
+              <button type="button" className="ghost" onClick={() => void deleteAttachment(attachment.id)}>Delete</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {status && <p className="hint">{status}</p>}
+    </div>
   );
 }
 
@@ -632,6 +799,10 @@ function OrgsView({
   const [identifier, setIdentifier] = useState("");
   const [orgId, setOrgId] = useState(organizations[0]?.id ?? "");
   const [status, setStatus] = useState("");
+  const [ssoIssuer, setSsoIssuer] = useState("");
+  const [ssoClientId, setSsoClientId] = useState("");
+  const [ssoMetadataUrl, setSsoMetadataUrl] = useState("");
+  const [scimToken, setScimToken] = useState("");
 
   async function createOrg() {
     await api("/api/organizations", {
@@ -658,6 +829,28 @@ function OrgsView({
     setStatus(`Exported ${format.toUpperCase()} audit log.`);
   }
 
+  async function saveSso() {
+    if (!orgId) return;
+    await api(`/api/organizations/${orgId}/idp`, {
+      method: "PUT",
+      body: JSON.stringify({
+        provider: "oidc",
+        issuer: ssoIssuer,
+        clientId: ssoClientId,
+        metadataUrl: ssoMetadataUrl,
+        enabled: true,
+      }),
+    }, token);
+    setStatus("SSO IdP configuration saved.");
+  }
+
+  async function createScimToken() {
+    if (!orgId) return;
+    const data = await api<{ token: string }>(`/api/organizations/${orgId}/scim-tokens`, { method: "POST" }, token);
+    setScimToken(data.token);
+    setStatus("SCIM provisioning token created.");
+  }
+
   return (
     <section className="panel">
       <header><h2>Organizations</h2><p>Team vaults, collections, and SIEM-ready audit exports.</p></header>
@@ -669,16 +862,31 @@ function OrgsView({
           <button onClick={() => void createOrg()} disabled={!name || !identifier}>Create</button>
         </div>
         <div className="card">
-          <h3>Audit export</h3>
+          <h3>SSO & SCIM</h3>
           <label>Organization
             <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
               {organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
             </select>
           </label>
-          <button onClick={() => void exportAudit("ndjson")} disabled={!orgId}>Export NDJSON</button>
-          <button onClick={() => void exportAudit("csv")} disabled={!orgId}>Export CSV</button>
-          {status && <p className="success">{status}</p>}
+          <label>OIDC issuer<input value={ssoIssuer} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://login.microsoftonline.com/tenant/v2.0" /></label>
+          <label>Client ID<input value={ssoClientId} onChange={(e) => setSsoClientId(e.target.value)} /></label>
+          <label>Metadata URL<input value={ssoMetadataUrl} onChange={(e) => setSsoMetadataUrl(e.target.value)} /></label>
+          <button onClick={() => void saveSso()} disabled={!orgId}>Save OIDC config</button>
+          <button onClick={() => void createScimToken()} disabled={!orgId}>Generate SCIM token</button>
+          {scimToken && <p className="success">SCIM token (copy now): <code>{scimToken}</code></p>}
+          {orgId && <p className="hint">SSO login: <code>{`${import.meta.env.VITE_API_URL ?? ""}/api/sso/${orgId}/login`}</code></p>}
         </div>
+      </div>
+      <div className="card">
+        <h3>Audit export</h3>
+        <label>Organization
+          <select value={orgId} onChange={(e) => setOrgId(e.target.value)}>
+            {organizations.map((org) => <option key={org.id} value={org.id}>{org.name}</option>)}
+          </select>
+        </label>
+        <button onClick={() => void exportAudit("ndjson")} disabled={!orgId}>Export NDJSON</button>
+        <button onClick={() => void exportAudit("csv")} disabled={!orgId}>Export CSV</button>
+        {status && <p className="success">{status}</p>}
       </div>
       <div className="card list">
         <h3>Your organizations</h3>
@@ -690,7 +898,15 @@ function OrgsView({
   );
 }
 
-function EmergencyView({ token, email }: { token: string; email: string }) {
+function EmergencyView({
+  token,
+  email,
+  symmetricKey,
+}: {
+  token: string;
+  email: string;
+  symmetricKey: Uint8Array;
+}) {
   const [granteeEmail, setGranteeEmail] = useState("");
   const [waitDays, setWaitDays] = useState("7");
   const [outgoing, setOutgoing] = useState<Array<Record<string, unknown>>>([]);
@@ -726,6 +942,27 @@ function EmergencyView({ token, email }: { token: string; email: string }) {
     refresh();
   }
 
+  async function storeVaultKey(grantId: string) {
+    const encryptedVaultKey = await encryptJsonBrowser(symmetricKey, { key: "vault-symmetric-key" });
+    await api(`/api/emergency-access/${grantId}/vault-key`, {
+      method: "PUT",
+      body: JSON.stringify({ encryptedVaultKey }),
+    }, token);
+    setStatus("Encrypted vault key uploaded for grantee recovery.");
+    refresh();
+  }
+
+  async function initiateRecovery(id: string) {
+    await api(`/api/emergency-access/${id}/initiate`, { method: "POST" }, token);
+    setStatus("Recovery initiated — waiting period started.");
+    refresh();
+  }
+
+  async function claimVaultKey(id: string) {
+    const data = await api<{ encryptedVaultKey: { iv: string; data: string } }>(`/api/emergency-access/${id}/vault-key`, {}, token);
+    setStatus(`Vault key material ready (${data.encryptedVaultKey.iv.slice(0, 8)}…). Decrypt locally with grantor's shared secret.`);
+  }
+
   return (
     <section className="panel">
       <header><h2>Emergency access</h2><p>Designate a trusted contact who can request vault access after a waiting period.</p></header>
@@ -738,7 +975,14 @@ function EmergencyView({ token, email }: { token: string; email: string }) {
       <div className="grid two">
         <div className="card list">
           <h3>Outgoing ({email})</h3>
-          <ul>{outgoing.map((grant) => <li key={String(grant.id)}><strong>{String(grant.grantee_email)}</strong> — {String(grant.status)}</li>)}</ul>
+          <ul>
+            {outgoing.map((grant) => (
+              <li key={String(grant.id)}>
+                <strong>{String(grant.grantee_email)}</strong> — {String(grant.status)}
+                <button onClick={() => void storeVaultKey(String(grant.id))}>Upload vault key</button>
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="card list">
           <h3>Incoming invitations</h3>
@@ -750,12 +994,90 @@ function EmergencyView({ token, email }: { token: string; email: string }) {
                   {grant.status === "pending" && (
                     <button onClick={() => void acceptGrant(String(grant.id))}>Accept</button>
                   )}
+                  {grant.status === "accepted" && (
+                    <button onClick={() => void initiateRecovery(String(grant.id))}>Request access</button>
+                  )}
+                  {grant.status === "recovery_initiated" && (
+                    <button onClick={() => void claimVaultKey(String(grant.id))}>Claim vault key</button>
+                  )}
                 </li>
               ))}
             </ul>
           )}
         </div>
       </div>
+    </section>
+  );
+}
+
+function SecurityView({
+  token,
+  email,
+}: {
+  token: string;
+  email: string;
+}) {
+  const [credentials, setCredentials] = useState<Array<Record<string, unknown>>>([]);
+  const [totpSecret, setTotpSecret] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [status, setStatus] = useState("");
+
+  async function refresh() {
+    const data = await api<{ credentials: Array<Record<string, unknown>> }>("/api/webauthn/credentials", {}, token);
+    setCredentials(data.credentials);
+  }
+
+  useEffect(() => {
+    void refresh();
+  }, [token]);
+
+  async function registerPasskey() {
+    const { startRegistration } = await import("@simplewebauthn/browser");
+    const options = await api<PublicKeyCredentialCreationOptionsJSON>("/api/webauthn/register/options", {
+      method: "POST",
+      body: JSON.stringify({ name: "Primary passkey" }),
+    }, token);
+    const response = await startRegistration({ optionsJSON: options });
+    await api("/api/webauthn/register/verify", {
+      method: "POST",
+      body: JSON.stringify({ response, name: "Primary passkey" }),
+    }, token);
+    setStatus("Passkey registered.");
+    refresh();
+  }
+
+  async function setupTotp() {
+    const data = await api<{ secret: string; otpauthUrl: string }>("/api/auth/totp/setup", { method: "POST" }, token);
+    setTotpSecret(data.secret);
+    setStatus(`Scan in OmniAuth: ${data.otpauthUrl}`);
+  }
+
+  async function enableTotp() {
+    await api("/api/auth/totp/enable", {
+      method: "POST",
+      body: JSON.stringify({ code: totpCode }),
+    }, token);
+    setStatus("Account 2FA enabled.");
+  }
+
+  return (
+    <section className="panel">
+      <header><h2>Security</h2><p>Passkeys, authenticator 2FA, and account hardening.</p></header>
+      <div className="grid two">
+        <div className="card">
+          <h3>Passkeys ({email})</h3>
+          <button onClick={() => void registerPasskey()}>Register passkey</button>
+          <ul>{credentials.map((cred) => <li key={String(cred.id)}>{String(cred.name)} — {String(cred.credential_id).slice(0, 12)}…</li>)}</ul>
+        </div>
+        <div className="card">
+          <h3>Authenticator 2FA</h3>
+          <button onClick={() => void setupTotp()}>Generate TOTP secret</button>
+          {totpSecret && <code className="mono">{totpSecret}</code>}
+          <label>Verification code<input value={totpCode} onChange={(e) => setTotpCode(e.target.value)} maxLength={6} /></label>
+          <button onClick={() => void enableTotp()} disabled={!totpCode}>Enable 2FA</button>
+        </div>
+      </div>
+      {status && <p className="success">{status}</p>}
     </section>
   );
 }

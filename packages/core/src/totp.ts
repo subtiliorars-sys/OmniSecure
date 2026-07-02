@@ -56,6 +56,21 @@ export function normalizeTotpSecret(secret: string): string {
   return (fromUri ?? trimmed).replace(/\s+/g, "").toUpperCase();
 }
 
+export async function verifyTotpCode(
+  secret: string,
+  code: string,
+  window = 1,
+  timestamp = Date.now(),
+): Promise<boolean> {
+  if (!/^\d{6}$/.test(code)) return false;
+  const normalized = normalizeTotpSecret(secret);
+  for (let step = -window; step <= window; step++) {
+    const expected = await generateTotp(normalized, { timestamp: timestamp + step * 30_000 });
+    if (expected === code) return true;
+  }
+  return false;
+}
+
 async function hmacDigest(
   algorithm: "SHA1" | "SHA256" | "SHA512",
   key: Uint8Array,

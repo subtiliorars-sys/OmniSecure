@@ -153,7 +153,82 @@ function migrate(db: Database.Database): void {
       metadata TEXT,
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      cipher_id TEXT NOT NULL REFERENCES ciphers(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      file_name TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      encrypted_data_iv TEXT NOT NULL,
+      encrypted_data_data TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      counter INTEGER NOT NULL DEFAULT 0,
+      transports TEXT,
+      name TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS webauthn_challenges (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      email TEXT,
+      challenge TEXT NOT NULL,
+      type TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS organization_idp (
+      organization_id TEXT PRIMARY KEY REFERENCES organizations(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL,
+      issuer TEXT NOT NULL,
+      client_id TEXT,
+      client_secret TEXT,
+      metadata_url TEXT,
+      saml_entry_point TEXT,
+      saml_cert TEXT,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS scim_tokens (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      token_hint TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sso_states (
+      id TEXT PRIMARY KEY,
+      organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+      state TEXT NOT NULL UNIQUE,
+      nonce TEXT NOT NULL,
+      redirect_uri TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
   `);
+
+  addColumnIfMissing(db, "emergency_access", "encrypted_vault_key_iv", "TEXT");
+  addColumnIfMissing(db, "emergency_access", "encrypted_vault_key_data", "TEXT");
+  addColumnIfMissing(db, "emergency_access", "recovery_initiated_at", "TEXT");
+  addColumnIfMissing(db, "emergency_access", "grantee_user_id", "TEXT");
+}
+
+function addColumnIfMissing(db: Database.Database, table: string, column: string, type: string): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((entry) => entry.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
 }
 
 export type AppDatabase = Database.Database;

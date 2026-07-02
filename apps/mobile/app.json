@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "OmniSecure",
+    "slug": "omnisecure",
+    "version": "0.4.0",
+    "orientation": "portrait",
+    "scheme": "omnisecure",
+    "platforms": ["ios", "android"],
+    "ios": {
+      "bundleIdentifier": "us.omnitender.omnisecure"
+    },
+    "android": {
+      "package": "us.omnitender.omnisecure"
+    },
+    "extra": {
+      "apiUrl": "http://localhost:8787"
+    }
+  }
+}

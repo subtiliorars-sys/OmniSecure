@@ -212,3 +212,26 @@ code, .mono {
   font-weight: 700;
 }
 .stat label { color: var(--muted); }
+
+.attachments {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.attachments ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+}
+.attachments li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.file-upload input[type="file"] {
+  margin-top: 0.35rem;
+  font-size: 0.85rem;
+}

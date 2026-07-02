@@ -20,6 +20,7 @@ Built for the [OmniTender](https://github.com/subtiliorars-sys/OmniTender) ecosy
 ```
 apps/browser-extension/ Chrome/Edge extension (autofill)
 apps/vault-web/          Web vault (React + Vite)
+apps/mobile/               Expo mobile app (iOS/Android)
 packages/server         REST API (Fastify + SQLite/Postgres)
 packages/crypto         Zero-knowledge crypto (Node + Web Crypto)
 packages/core           Shared types, generators, health reports
@@ -75,6 +76,7 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 - [Bitwarden feature parity map](docs/BITWARDEN-PARITY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Self-hosting guide](docs/SELF-HOST.md)
+- [Deployment options](docs/DEPLOYMENT.md) — Fly.io, Railway, Docker prod
 - [OmniTender ecosystem](docs/OMNITENDER-ECOSYSTEM.md)
 
 ## Roadmap
@@ -83,9 +85,11 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 
 **v0.2:** Browser extension, Bitwarden CSV import, ecosystem wiring.
 
-**v0.3 (current):** HIBP breach checks, Bitwarden JSON import/export, TOTP codes in vault, emergency access UI, SIEM audit export, Send receive page, Firefox extension manifest, CI.
+**v0.3:** HIBP breach checks, Bitwarden JSON import/export, TOTP codes in vault, emergency access UI, SIEM audit export, Send receive page, Firefox extension manifest, CI.
 
-**v0.4:** Mobile apps, SSO (SAML/OIDC), SCIM, passkey-native login.
+**v0.4 (current):** Mobile app (Expo), SSO (OIDC/SAML), SCIM provisioning, WebAuthn passkeys, encrypted attachments, emergency vault-key handoff, deployment guides (Fly.io + prod Docker).
+
+**v0.5:** Postgres driver, SAML signature validation, desktop app, Helm chart.
 
 ## License
 

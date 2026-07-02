@@ -1,0 +1,19 @@
+# Fly / Docker API build context (packages only)
+.git
+.github
+apps
+data
+docker/docker-compose*.yml
+docs
+deploy
+fly.toml
+*.md
+.env
+.env.*
+**/.env
+**/.env.*
+**/node_modules
+**/dist
+**/*.db
+**/.cursor
+**/.vscode

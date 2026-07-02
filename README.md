@@ -76,7 +76,8 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 - [Bitwarden feature parity map](docs/BITWARDEN-PARITY.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Self-hosting guide](docs/SELF-HOST.md)
-- [Deployment options](docs/DEPLOYMENT.md) — Fly.io, Railway, Docker prod
+- [Deployment options](docs/DEPLOYMENT.md)
+- [Fly.io + Cloudflare Pages](docs/DEPLOY-FLY-CLOUDFLARE.md) — Fly.io, Railway, Docker prod
 - [OmniTender ecosystem](docs/OMNITENDER-ECOSYSTEM.md)
 
 ## Roadmap

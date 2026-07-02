@@ -38,7 +38,22 @@ Uses `docker-compose.prod.yml` with optional Postgres service and attachment vol
 
 ---
 
-## 2. Fly.io
+## 2. Fly.io + Cloudflare Pages (recommended production)
+
+**Split stack:** API on Fly.io, vault web on Cloudflare Pages (use an existing Pages project until you assign a permanent domain).
+
+See **[DEPLOY-FLY-CLOUDFLARE.md](./DEPLOY-FLY-CLOUDFLARE.md)** for step-by-step setup, secrets, and GitHub Actions.
+
+Quick API deploy:
+
+```bash
+fly deploy --config fly.toml
+curl https://omnisecure-api.fly.dev/health
+```
+
+---
+
+## 3. Fly.io only
 
 1. Install [flyctl](https://fly.io/docs/hands-on/install-flyctl/)
 2. From repo root:
@@ -51,13 +66,13 @@ fly secrets set WEBAUTHN_ORIGIN=https://vault.your-domain.com
 fly deploy
 ```
 
-Deploy static web separately (Fly Machines + nginx, Cloudflare Pages, or GitHub Pages pointing API URL at Fly app).
+Deploy static web separately (Cloudflare Pages, Fly Machines + nginx, or GitHub Pages pointing API URL at Fly app).
 
 `fly.toml` in repo root targets the API Dockerfile.
 
 ---
 
-## 3. Railway / Render
+## 4. Railway / Render
 
 **Railway**
 

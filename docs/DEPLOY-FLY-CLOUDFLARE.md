@@ -5,7 +5,7 @@ Production layout:
 | Layer | Host | Role |
 |-------|------|------|
 | **API** | `https://omnisecure-api.fly.dev` | Fastify + SQLite on Fly volume |
-| **Vault web** | Your Cloudflare Pages URL | Static React app (`apps/vault-web`) |
+| **Vault web** | `https://pixelsports.pages.dev` (temp) | Static React app (`apps/vault-web`) |
 
 Use an existing Cloudflare Pages project (custom domain or `*.pages.dev`) until you dedicate a permanent hostname. Update Fly secrets when the vault URL changes.
 
@@ -111,7 +111,7 @@ Optional repo variables:
 | Variable | Default |
 |----------|---------|
 | `VITE_API_URL` | `https://omnisecure-api.fly.dev` |
-| `CLOUDFLARE_PAGES_PROJECT` | `omnisecure-vault` |
+| `CLOUDFLARE_PAGES_PROJECT` | `pixelsports` (temporary; see below) |
 
 Push to `main` runs `.github/workflows/deploy.yml`.
 
@@ -138,6 +138,22 @@ Push to `main` runs `.github/workflows/deploy.yml`.
 ---
 
 ## 4. Reusing an existing Pages project
+
+**Current temp host:** OmniSecure vault is deployed to the existing **`pixelsports`** Pages project at [https://pixelsports.pages.dev](https://pixelsports.pages.dev). Fly WebAuthn/SSO secrets point at that URL.
+
+Other Pages projects in this Cloudflare account (as of 2026-07-02):
+
+| Project | URL | Notes |
+|---------|-----|-------|
+| `pixelsports` | `pixelsports.pages.dev` | **In use** for OmniSecure vault (was PixelSports preview) |
+| `cairn-ckb` | `cairn-ckb-27s.pages.dev` | Cairn landing — do not overwrite |
+| `ilerioluwa-goalkeeper` | `ilerioluwa-goalkeeper-c5g.pages.dev` | Client site — do not overwrite |
+
+To redeploy vault manually (uses Cairn repo Cloudflare secrets):
+
+```powershell
+gh workflow run deploy-omnisecure-vault.yml -R subtiliorars-sys/Cairn -f project_name=pixelsports
+```
 
 If you already have a Pages project on a domain you plan to repurpose:
 

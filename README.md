@@ -101,3 +101,9 @@ AGPL-3.0-or-later — see [LICENSE](LICENSE).
 - [OmniTender](https://github.com/subtiliorars-sys/OmniTender) — company brain
 - [OmniAuth](https://github.com/subtiliorars-sys/OmniAuth) — TOTP authenticator
 - [omnitender-web](https://github.com/subtiliorars-sys/omnitender-web) — public marketing site
+
+
+## Backroom verify notes
+
+See docs/BACKROOM-NOTES-2026-07-13.md for the 2026-07-13 local verify checklist (docs-only; no auth changes).
+

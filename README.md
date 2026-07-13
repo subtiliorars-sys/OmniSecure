@@ -92,6 +92,12 @@ See [docs/SELF-HOST.md](docs/SELF-HOST.md).
 
 **v0.5:** Postgres driver, SAML signature validation, desktop app, Helm chart.
 
+## Fleet
+
+This repo is **OmniTender fleet HQ for identity security** — zero-knowledge password/secrets vault, Send, and CLI for the ecosystem.
+
+Cross-repo wiring and agent topology: [neural-network/connectome](https://github.com/subtiliorars-sys/neural-network/tree/main/connectome).
+
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE).

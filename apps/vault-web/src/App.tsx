@@ -304,8 +304,39 @@ function AuthScreen({
           </button>
         )}
         <p className="hint">End-to-end encrypted. OmniSecure servers store ciphertext only — your master password never leaves this device.</p>
+        <FirstAuthTip />
       </div>
     </div>
+  );
+}
+
+function FirstAuthTip() {
+  const [show, setShow] = useState(() => {
+    try {
+      return typeof localStorage !== "undefined" && localStorage.getItem("omnisecure-first-auth-tip-v1") !== "1";
+    } catch {
+      return false;
+    }
+  });
+  if (!show) return null;
+  return (
+    <p className="hint" style={{ marginTop: "0.75rem", color: "#7dd3c0" }}>
+      First vault? Create account here before the browser extension — master password never leaves this device.{" "}
+      <button
+        type="button"
+        className="ghost"
+        onClick={() => {
+          try {
+            localStorage.setItem("omnisecure-first-auth-tip-v1", "1");
+          } catch {
+            /* ignore */
+          }
+          setShow(false);
+        }}
+      >
+        Got it
+      </button>
+    </p>
   );
 }
 

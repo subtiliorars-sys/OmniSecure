@@ -133,6 +133,26 @@ export function App() {
     setSymmetricKey(null);
   }
 
+  function handleLockVault() {
+    setUnlocked(false);
+    setSymmetricKey(null);
+    setDecrypted([]);
+    setSync(null);
+  }
+
+  useEffect(() => {
+    if (!unlocked) return;
+    const onVisibility = () => {
+      if (!document.hidden) return;
+      setUnlocked(false);
+      setSymmetricKey(null);
+      setDecrypted([]);
+      setSync(null);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [unlocked]);
+
   if (!session) {
     return <AuthScreen onAuth={handleAuth} onPasskeySession={(next) => { saveSession(next); setSession(next); }} loading={loading} error={error} />;
   }
@@ -184,6 +204,7 @@ export function App() {
         </nav>
         <div className="sidebar-footer">
           <span>{session.email}</span>
+          <button className="ghost" onClick={handleLockVault}>Lock vault</button>
           <button className="ghost" onClick={handleLogout}>Lock & sign out</button>
         </div>
       </aside>

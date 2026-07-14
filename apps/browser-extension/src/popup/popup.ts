@@ -25,10 +25,19 @@ async function render(): Promise<void> {
 }
 
 function renderLogin(): void {
+  let tipHtml = "";
+  try {
+    if (localStorage.getItem("omnisecure-ext-first-tip-v1") !== "1") {
+      tipHtml = `<p class="sub" id="first-tip" style="color:#7dd3c0">First run? Create a vault in vault-web, then sign in here — master password never leaves this browser.</p>`;
+    }
+  } catch {
+    /* ignore */
+  }
   app.innerHTML = `
     <div class="wrap">
       <h1><span class="mark">OS</span> OmniSecure</h1>
       <p class="sub">Sign in to autofill from your vault</p>
+      ${tipHtml}
       <label>API URL<input id="api" value="${DEFAULT_API}" /></label>
       <label>Email<input id="email" type="email" placeholder="you@omnitender.us" /></label>
       <label>Master password<input id="password" type="password" /></label>
@@ -37,6 +46,7 @@ function renderLogin(): void {
     </div>`;
 
   document.getElementById("signin")!.addEventListener("click", async () => {
+    try { localStorage.setItem("omnisecure-ext-first-tip-v1", "1"); } catch { /* ignore */ }
     const apiUrl = (document.getElementById("api") as HTMLInputElement).value.trim();
     const email = (document.getElementById("email") as HTMLInputElement).value.trim();
     const password = (document.getElementById("password") as HTMLInputElement).value;

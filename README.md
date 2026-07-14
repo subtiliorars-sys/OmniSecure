@@ -47,6 +47,10 @@ pnpm build
 pnpm dev
 ```
 
+### First-run tip
+
+Start with **vault-web** after `pnpm dev` — create a local vault account before trying the browser extension autofill. Keep the master password offline; this stack is zero-knowledge (server never sees it). Lock/timeout settings live in the vault account prefs once signed in.
+
 - API: http://localhost:8787
 - Web vault: http://localhost:5173
 

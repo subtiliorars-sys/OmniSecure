@@ -147,4 +147,17 @@ async function renderMatches(session: ExtensionSession): Promise<void> {
   });
 }
 
+async function lockVaultKey(): Promise<void> {
+  const session = await getSession();
+  if (!session?.unlockedKey) return;
+  await saveSession({ ...session, unlockedKey: undefined });
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") void lockVaultKey();
+});
+window.addEventListener("pagehide", () => {
+  void lockVaultKey();
+});
+
 void render();

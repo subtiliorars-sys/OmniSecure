@@ -27,8 +27,8 @@ async function render(): Promise<void> {
 function renderLogin(): void {
   let tipHtml = "";
   try {
-    if (localStorage.getItem("omnisecure-ext-first-tip-v1") !== "1") {
-      tipHtml = `<p class="sub" id="first-tip" style="color:#7dd3c0">First run? Create a vault in vault-web, then sign in here — master password never leaves this browser.</p>`;
+    if (localStorage.getItem("omnisecure-ext-first-tip-v2") !== "1") {
+      tipHtml = `<p class="sub" id="first-tip" style="color:#7dd3c0">First run? Create a vault in vault-web, then sign in here — master password stays in this browser. Closing the popup locks the session.</p>`;
     }
   } catch {
     /* ignore */
@@ -46,7 +46,7 @@ function renderLogin(): void {
     </div>`;
 
   document.getElementById("signin")!.addEventListener("click", async () => {
-    try { localStorage.setItem("omnisecure-ext-first-tip-v1", "1"); } catch { /* ignore */ }
+    try { localStorage.setItem("omnisecure-ext-first-tip-v2", "1"); } catch { /* ignore */ }
     const apiUrl = (document.getElementById("api") as HTMLInputElement).value.trim();
     const email = (document.getElementById("email") as HTMLInputElement).value.trim();
     const password = (document.getElementById("password") as HTMLInputElement).value;

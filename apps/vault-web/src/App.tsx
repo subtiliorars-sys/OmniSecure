@@ -334,7 +334,7 @@ function AuthScreen({
 function FirstAuthTip() {
   const [show, setShow] = useState(() => {
     try {
-      return typeof localStorage !== "undefined" && localStorage.getItem("omnisecure-first-auth-tip-v1") !== "1";
+      return typeof localStorage !== "undefined" && localStorage.getItem("omnisecure-first-auth-tip-v2") !== "1";
     } catch {
       return false;
     }
@@ -342,13 +342,13 @@ function FirstAuthTip() {
   if (!show) return null;
   return (
     <p className="hint" style={{ marginTop: "0.75rem", color: "#7dd3c0" }}>
-      First vault? Create account here before the browser extension — master password never leaves this device.{" "}
+      First vault? Create here before the extension — master password stays on this device. Hiding the tab locks an unlocked vault.{" "}
       <button
         type="button"
         className="ghost"
         onClick={() => {
           try {
-            localStorage.setItem("omnisecure-first-auth-tip-v1", "1");
+            localStorage.setItem("omnisecure-first-auth-tip-v2", "1");
           } catch {
             /* ignore */
           }
